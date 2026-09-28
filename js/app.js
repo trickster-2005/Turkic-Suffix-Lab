@@ -77,15 +77,15 @@
   };
   const conceptLabel = (c) => (state.ui === 'zh' ? c.zh : c.en);
 
-  function meaning(c, slots) {
+  function meaning(c, slots, custom = state.custom) {
     const pl = slots.number === 'PL';
     const hasPoss = slots.poss && slots.poss !== 'NONE';
     if (state.ui === 'zh') {
-      const noun = (state.custom ? '［詞幹］' : c.zh.split('／')[0]) + (pl ? '（複數）' : '');
+      const noun = (custom ? '［詞幹］' : c.zh.split('／')[0]) + (pl ? '（複數）' : '');
       const np = (hasPoss ? UI.zh.poss_word[slots.poss] : '') + noun;
       return { NOM: np, GEN: np + '的', ACC: np + '（特指受詞）', DAT: '往／給' + np, LOC: '在' + np, ABL: '從' + np }[slots.case];
     }
-    const base = state.custom ? (pl ? '[stem]s' : '[stem]') : pl ? c.enPl : c.en.split(' / ')[0];
+    const base = custom ? (pl ? '[stem]s' : '[stem]') : pl ? c.enPl : c.en.split(' / ')[0];
     const np = hasPoss ? UI.en.poss_word[slots.poss] + ' ' + base : slots.case === 'NOM' ? base : 'the ' + base;
     return { NOM: np, GEN: 'of ' + np, ACC: np + ' (definite object)', DAT: 'to ' + np, LOC: 'in / at ' + np, ABL: 'from ' + np }[slots.case];
   }
@@ -350,6 +350,7 @@
   }
 
   function renderParadigm() {
+    hideCaseInfo();
     const P = state.para;
     const opts = LEX.map((c) => `<option value="${c.id}" ${!state.custom && c.id === state.concept ? 'selected' : ''}>${esc(c.tr.word)} · ${esc(conceptLabel(c))}</option>`).join('');
     $('#paradigm-controls').innerHTML = `
@@ -368,7 +369,9 @@
     ).join('')}</tr>`;
     const body = CASE_LIST.map(
       (cs) =>
-        `<tr><th scope="row">${esc(t(cs))}<span class="rom">${esc(t(cs + '_s'))}</span></th>${POSS_LIST.map((p) => {
+        `<tr><th scope="row"><div class="case-h"><span>${esc(t(cs))}</span><button type="button" class="info-btn" data-info="${cs}" aria-label="${esc(
+          t('aboutCase') + ' ' + t(cs)
+        )}" aria-expanded="false" aria-controls="case-pop">i</button></div></th>${POSS_LIST.map((p) => {
           const d = E.derive(l, en, { number: P.number, poss: p, case: cs });
           const cur = state.slots.number === P.number && state.slots.poss === p && state.slots.case === cs;
           return `<td class="cell${cur ? ' current' : ''}" data-cell-poss="${p}" data-cell-case="${cs}" tabindex="0">${d.stem ? segsHTML(d, l) : '—'}${
@@ -378,6 +381,61 @@
     ).join('');
     $('#paradigm-table').innerHTML = `<div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
   }
+
+  /* Case info popover: mouse hover previews it, click / tap pins it */
+  const pop = { btn: null, pinned: false };
+
+  function showCaseInfo(btn, pinned) {
+    const cs = btn.dataset.info;
+    const l = state.para.lang;
+    const house = conceptById('house');
+    const slots = { number: 'SG', poss: 'NONE', case: cs };
+    const d = E.derive(l, house[l], slots);
+    const el = $('#case-pop');
+    el.innerHTML = `<div class="pop-h"><b>${esc(t(cs))}</b><span class="pop-tag">${cs}</span></div>
+      <p>${esc(t('caseInfo')[cs])}</p>
+      <div class="pop-ex"><span class="word">${segsHTML(d, l)}</span><span class="muted">${esc(meaning(house, slots, false))}</span></div>`;
+    if (pop.btn && pop.btn !== btn) pop.btn.setAttribute('aria-expanded', 'false');
+    pop.btn = btn;
+    pop.pinned = pinned;
+    btn.setAttribute('aria-expanded', 'true');
+    el.hidden = false;
+    // Below the button (flipped above if there is no room), clamped to the viewport
+    const r = btn.getBoundingClientRect();
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - 28, window.innerWidth - w - 12));
+    const below = r.bottom + 8 + h < window.innerHeight - 8;
+    el.style.left = left + 'px';
+    el.style.top = (below ? r.bottom + 8 : r.top - h - 8) + 'px';
+    el.dataset.side = below ? 'below' : 'above';
+    el.style.setProperty('--arrow-x', r.left + r.width / 2 - left + 'px');
+  }
+
+  function hideCaseInfo() {
+    const el = $('#case-pop');
+    if (el) el.hidden = true;
+    if (pop.btn) pop.btn.setAttribute('aria-expanded', 'false');
+    pop.btn = null;
+    pop.pinned = false;
+  }
+
+  document.addEventListener('pointerover', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.info-btn');
+    if (b && ev.pointerType === 'mouse' && !pop.pinned) showCaseInfo(b, false);
+  });
+  document.addEventListener('pointerout', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.info-btn');
+    if (b && ev.pointerType === 'mouse' && !pop.pinned && !b.contains(ev.relatedTarget)) hideCaseInfo();
+  });
+  window.addEventListener('resize', hideCaseInfo);
+  document.addEventListener(
+    'scroll',
+    () => {
+      if (pop.btn) hideCaseInfo();
+    },
+    { capture: true, passive: true }
+  );
 
   function renderExplorer() {
     $('#explorer-controls').innerHTML = `<div class="group">${EX_SLOTS.map(
@@ -669,6 +727,7 @@
   }
 
   function renderAll() {
+    hideCaseInfo();
     applyStatic();
     renderTab();
     writeHash();
@@ -715,9 +774,15 @@
 
   /* ───────────── Events ───────────── */
   document.addEventListener('click', (ev) => {
+    if (pop.btn && !ev.target.closest('#case-pop, .info-btn')) hideCaseInfo();
     const el = ev.target.closest('button, td.cell');
     if (!el) return;
     const ds = el.dataset;
+
+    if (ds.info) {
+      if (pop.btn === el && pop.pinned) return hideCaseInfo();
+      return showCaseInfo(el, true);
+    }
 
     if (ds.tab) return setTab(ds.tab);
     if (el.id === 'btn-lang') {
@@ -852,6 +917,12 @@
   });
 
   document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && pop.btn) {
+      const b = pop.btn;
+      hideCaseInfo();
+      b.focus();
+      return;
+    }
     if (ev.target.matches('input, select, textarea')) return;
     // Tab list arrow navigation
     if (ev.target.closest('.tabs') && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) {
