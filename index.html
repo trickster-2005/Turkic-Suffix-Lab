@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Turkic Suffix Lab</title>
+  <meta name="description" content="Interactive morphology engine: vowel harmony and consonant assimilation in Turkish, Kazakh and Uzbek noun suffixes. English / 繁體中文.">
+  <meta name="theme-color" content="#0e1120">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e1120'/%3E%3Crect x='8' y='22' width='16' height='20' rx='4' fill='%23d9dcef'/%3E%3Crect x='26' y='22' width='14' height='20' rx='4' fill='%2360b8ff'/%3E%3Crect x='42' y='22' width='14' height='20' rx='4' fill='%23ffb454'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="brand-text">
+        <h1 data-t="title">Turkic Suffix Lab</h1>
+        <p data-t="subtitle"></p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="btn-lang" class="btn ghost" type="button"></button>
+      <button id="btn-theme" class="btn ghost icon" type="button" aria-label="theme">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1.5 12h3M19.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+      </button>
+      <a class="btn ghost icon" href="https://github.com/trickster-2005/Turkic-Suffix-Lab" target="_blank" rel="noopener" aria-label="GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" data-tab="builder"><span class="tab-ic">🧱</span><span data-t="tab_builder"></span></button>
+    <button role="tab" data-tab="paradigm"><span class="tab-ic">▦</span><span data-t="tab_paradigm"></span></button>
+    <button role="tab" data-tab="practice"><span class="tab-ic">🎯</span><span data-t="tab_practice"></span></button>
+    <button role="tab" data-tab="grammar"><span class="tab-ic">📖</span><span data-t="tab_grammar"></span></button>
+    <button role="tab" data-tab="code"><span class="tab-ic">&lt;/&gt;</span><span data-t="tab_code"></span></button>
+  </nav>
+
+  <main id="main">
+    <!-- BUILDER -->
+    <section class="panel" id="panel-builder" role="tabpanel">
+      <div class="builder">
+        <aside class="controls">
+          <div class="card">
+            <div class="card-head">
+              <h2><span class="step-no">1</span><span data-t="stemTitle"></span></h2>
+              <p class="hint" data-t="stemHint"></p>
+            </div>
+            <div id="concepts"></div>
+            <div id="stem-inputs" class="stem-inputs"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head row">
+              <h2><span class="step-no">2</span><span data-t="slotsTitle"></span></h2>
+              <div class="mini-actions">
+                <button class="btn small" id="btn-random" type="button"><span aria-hidden="true">🎲</span> <span data-t="random"></span></button>
+                <button class="btn small ghost" id="btn-reset" type="button" data-t="reset"></button>
+              </div>
+            </div>
+            <p class="hint" data-t="slotsHint"></p>
+            <div id="slots"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2><span class="step-no">3</span><span data-t="langsTitle"></span></h2></div>
+            <div id="lang-toggles" class="lang-toggles"></div>
+          </div>
+        </aside>
+
+        <div class="results" id="results" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- PARADIGMS -->
+    <section class="panel" id="panel-paradigm" role="tabpanel" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 data-t="paradigmTitle"></h2>
+          <p class="hint" data-t="paradigmHint"></p>
+        </div>
+        <div id="paradigm-controls" class="toolbar"></div>
+        <div id="paradigm-table"></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2 data-t="explorerTitle"></h2>
+          <p class="hint" data-t="explorerHint"></p>
+        </div>
+        <div id="explorer-controls" class="toolbar"></div>
+        <div id="explorer"></div>
+      </div>
+    </section>
+
+    <!-- PRACTICE -->
+    <section class="panel narrow" id="panel-practice" role="tabpanel" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 data-t="practiceTitle"></h2>
+          <p class="hint" data-t="practiceHint"></p>
+        </div>
+        <div id="practice-controls" class="toolbar"></div>
+        <div id="scoreboard" class="scoreboard"></div>
+      </div>
+      <div id="quiz"></div>
+    </section>
+
+    <!-- GRAMMAR -->
+    <section class="panel" id="panel-grammar" role="tabpanel" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 data-t="vowelChartTitle"></h2>
+          <p class="hint" data-t="vowelChartHint"></p>
+        </div>
+        <div id="vowel-chart" class="vowel-chart"></div>
+      </div>
+      <h2 class="section-title" data-t="grammarTitle"></h2>
+      <div id="lessons" class="lessons"></div>
+    </section>
+
+    <!-- CODE -->
+    <section class="panel" id="panel-code" role="tabpanel" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 data-t="traceTitle"></h2>
+          <p class="hint" data-t="traceHint"></p>
+        </div>
+        <div id="trace"></div>
+      </div>
+      <div class="card">
+        <div class="card-head row">
+          <div>
+            <h2 data-t="codeTitle"></h2>
+            <p class="hint" data-t="codeHint"></p>
+          </div>
+          <button class="btn small" id="btn-copy-code" type="button" data-t="copy"></button>
+        </div>
+        <pre class="code"><code id="code-block"></code></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p data-t="footer"></p>
+    <p class="muted">© 2026 · <a href="https://github.com/trickster-2005/Turkic-Suffix-Lab" target="_blank" rel="noopener">GitHub</a></p>
+  </footer>
+
+  <button id="live-bar" class="live-bar" type="button" hidden></button>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/engine.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/snippet.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
