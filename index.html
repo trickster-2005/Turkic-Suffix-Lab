@@ -46,6 +46,17 @@
   <main id="main">
     <!-- BUILDER -->
     <section class="panel" id="panel-builder" role="tabpanel">
+      <div class="card analyzer">
+        <div class="an-bar">
+          <label for="an-input" class="an-label"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/></svg><span data-t="anTitle"></span></label>
+          <div class="an-field">
+            <input id="an-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+            <button type="button" class="an-clear" id="an-clear" hidden>×</button>
+          </div>
+          <div class="an-examples" id="an-examples"></div>
+        </div>
+        <div id="an-results" aria-live="polite"></div>
+      </div>
       <div class="builder">
         <aside class="controls">
           <div class="card">

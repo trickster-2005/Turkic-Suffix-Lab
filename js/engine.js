@@ -700,7 +700,7 @@
       return d;
     }
 
-    return { norm, traits, build, roman: (s) => s, vowelSwap: { a: 'e', e: 'a', i: 'u', u: 'i' } };
+    return { norm, traits, build, toks, roman: (s) => s, vowelSwap: { a: 'e', e: 'a', i: 'u', u: 'i' } };
   })();
 
   /* ───────────────────────────── API ───────────────────────────────── */
@@ -753,7 +753,210 @@
     return shuffle([...out]).slice(0, n);
   }
 
-  const Engine = { SLOTS, LANGS, derive, traits, roman, norm, distractors, shuffle, latToCyr: KK.latToCyr, kkClass: KK.cls };
+  /* ───────────────────────── ANALYZER (reverse) ──────────────────────
+   * Analysis by synthesis: every candidate stem is run through all 84
+   * slot combinations and the generated form is compared with the input,
+   * so the analyzer reuses every generation rule instead of re-encoding
+   * them backwards. Stages, in priority order:
+   *   1. known stems (lexicon / current Builder entry), exact match
+   *   2. known stems, match only with one rule switched off → diagnosis
+   *   3. guessed stems (prefixes of the input, with alternations undone)
+   */
+  const ALL_SLOTS = [];
+  for (const number of SLOTS.number)
+    for (const poss of SLOTS.poss) for (const kase of SLOTS.case) ALL_SLOTS.push({ number, poss, case: kase });
+  const VSET = { tr: 'aeıioöuü', kk: 'аәеоөұүыіэяюиё', uz: ['a', 'e', 'i', 'o', 'u', "o'"] };
+  const isVow = (lang, t) => VSET[lang].includes(t);
+  const segsOf = (lang, s) => (lang === 'uz' ? UZ.toks(s) : [...s]);
+  const suffixCount = (s) => (s.number === 'PL') + (s.poss !== 'NONE') + (s.case !== 'NOM');
+
+  // Undo final-consonant softening: kitab- → kitap, кітаб- → кітап, yurag- → yurak, toq- → tog'
+  function unsoften(lang, p) {
+    const c = lastCh(p);
+    const out = [];
+    const swap = (to, flags) => out.push({ word: p.slice(0, -1) + to, ...flags });
+    if (lang === 'tr') {
+      const m = { b: 'p', c: 'ç', ğ: 'k', d: 't' }[c];
+      if (m) swap(m, { voicing: true });
+      else if (c === 'g' && p[p.length - 2] === 'n') swap('k', { voicing: true });
+    } else if (lang === 'kk') {
+      const m = { б: 'п', г: 'к', ғ: 'қ' }[c];
+      if (m) swap(m, { voicing: true });
+    } else {
+      if (p.endsWith("g'")) out.push({ word: p.slice(0, -2) + 'q', voicing: true });
+      else if (c === 'g') swap('k', { voicing: true });
+      else if (c === 'q') swap("g'", {});
+    }
+    return out;
+  }
+
+  // Undo vowel drop: ağz- → ağız, ауз- → ауыз, og'z- → og'iz
+  function unsyncope(lang, segs) {
+    const n = segs.length;
+    if (n < 3 || isVow(lang, segs[n - 1]) || isVow(lang, segs[n - 2])) return null;
+    const head = segs.slice(0, -1).join('');
+    const t = traits(lang, { word: head });
+    if (!t.lastVowel) return null;
+    const hv = lang === 'tr' ? (t.backness === 'back' ? (t.round ? 'u' : 'ı') : t.round ? 'ü' : 'i') : lang === 'kk' ? (t.backness === 'back' ? 'ы' : 'і') : 'i';
+    return { word: head + hv + segs[n - 1], syncope: true };
+  }
+
+  function guessStems(lang, w) {
+    const S = segsOf(lang, w);
+    const out = [];
+    for (let i = 2; i <= S.length; i++) {
+      const part = S.slice(0, i);
+      if (!part.some((t) => isVow(lang, t))) continue;
+      const p = part.join('');
+      out.push({ word: p });
+      out.push(...unsoften(lang, p));
+      const sy = unsyncope(lang, part);
+      if (sy) out.push(sy);
+    }
+    return out;
+  }
+
+  // Walk number → possessor → case, pruning branches whose partial form cannot
+  // lead to the target (the last 2 letters may still change: kitap → kitab-ım).
+  function* combos(lang, entry, target) {
+    const ok = (f) => !target || entry.syncope || target.startsWith(f.slice(0, -2));
+    for (const number of SLOTS.number) {
+      if (!ok(derive(lang, entry, { number, poss: 'NONE', case: 'NOM' }).form)) continue;
+      for (const poss of SLOTS.poss) {
+        if (poss !== 'NONE' && !ok(derive(lang, entry, { number, poss, case: 'NOM' }).form)) continue;
+        for (const kase of SLOTS.case) yield { number, poss, case: kase };
+      }
+    }
+  }
+
+  function exactMatches(lang, w, cands, seen, out) {
+    for (const c of cands) {
+      for (const slots of combos(lang, c.entry, w)) {
+        const d = derive(lang, c.entry, slots);
+        if (d.form !== w) continue;
+        const key = [lang, c.known, norm(lang, c.entry.word), slots.number, slots.poss, slots.case].join('|');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ lang, entry: c.entry, ref: c.ref, known: c.known, slots, n: suffixCount(slots), d });
+      }
+    }
+  }
+
+  // Compare the typed word with a correct form: ≤ 2 substitutions or 1 missing/extra letter.
+  function nearMiss(w, f) {
+    if (w.length === f.length) {
+      const pos = [];
+      for (let i = 0; i < f.length; i++) if (w[i] !== f[i]) pos.push(i);
+      return pos.length && pos.length <= 2 && f.length >= 4 ? { dist: pos.length, subs: pos.map((i) => [i, w[i], f[i]]), indel: null } : null;
+    }
+    if (Math.abs(w.length - f.length) !== 1 || f.length < 3) return null;
+    const [a, b] = w.length > f.length ? [w, f] : [f, w];
+    let i = 0;
+    while (i < b.length && a[i] === b[i]) i++;
+    if (a.slice(i + 1) !== b.slice(i)) return null;
+    return { dist: 1, subs: [], indel: { i, extra: w.length > f.length, ch: a[i] } };
+  }
+
+  // Which rule does a wrong letter point to? Decided by the segment it falls in.
+  function classify(lang, d, m) {
+    const at = (i) => {
+      let k = 0;
+      for (const s of d.segs) {
+        if (i < k + s.text.length) return s;
+        k += s.text.length;
+      }
+      return d.segs[d.segs.length - 1];
+    };
+    const kinds = new Set();
+    for (const [i, typed, right] of m.subs) {
+      const s = at(i);
+      if (s.kind === 'stem') {
+        if (!s.altered) return null; // a different stem, not a suffix error
+        kinds.add('stem');
+      } else if (s.kind === 'buffer') kinds.add('buffer');
+      else if (isVow(lang, typed) && isVow(lang, right)) kinds.add(lang === 'uz' ? 'uzinv' : 'harmony');
+      else if (!isVow(lang, typed) && !isVow(lang, right)) kinds.add('assim');
+      else kinds.add('spelling');
+    }
+    if (m.indel) {
+      const s = at(Math.min(m.indel.i, d.form.length - 1));
+      if (s.kind === 'stem' && m.indel.i < d.segs[0].text.length - 1) {
+        if (!s.altered) return null;
+        kinds.add('stem');
+      } else kinds.add('buffer');
+    }
+    return [...kinds];
+  }
+
+  function nearMatches(lang, w, cands, out) {
+    for (const c of cands) {
+      for (const slots of ALL_SLOTS) {
+        const d = derive(lang, c.entry, slots);
+        const m = nearMiss(w, d.form);
+        if (!m) continue;
+        const kinds = classify(lang, d, m);
+        if (!kinds) continue;
+        out.push({ lang, entry: c.entry, ref: c.ref, known: true, slots, n: suffixCount(slots), d, diag: { kinds, dist: m.dist, typed: w, subs: m.subs, indel: m.indel } });
+      }
+    }
+  }
+
+  function guessLangs(input) {
+    const s = String(input || '').toLowerCase();
+    if (/[а-яёәғқңөұүһі]/.test(s)) return { all: ['kk'], guess: ['kk'] };
+    if (/[çğıöşü]/.test(s)) return { all: ['tr'], guess: ['tr'] };
+    if (/['ʻʼ’‘`]|[qx]/.test(s)) return { all: ['uz', 'kk'], guess: ['uz'] };
+    return { all: ['tr', 'uz', 'kk'], guess: ['tr', 'uz'] };
+  }
+
+  /**
+   * @param input  the word to analyse (any language, any script)
+   * @param known  { tr: [{entry, ref}], kk: [...], uz: [...] } stems treated as real words
+   * @returns { mode: 'known' | 'diag' | 'guess' | 'none', results: [...] }
+   */
+  function analyze(input, known = {}) {
+    const langs = guessLangs(input);
+    const words = {};
+    for (const l of langs.all) words[l] = norm(l, input);
+    const seen = new Set();
+    const knownCands = (l) => {
+      const w = words[l];
+      return (known[l] || [])
+        .filter((k) => {
+          const s = norm(l, k.entry.word);
+          return s && w.startsWith(s.slice(0, 2));
+        })
+        .map((k) => ({ ...k, known: true }));
+    };
+
+    // 1. known stems, exact
+    let res = [];
+    for (const l of langs.all) if (words[l]) exactMatches(l, words[l], knownCands(l), seen, res);
+    if (res.length) return { mode: 'known', results: res.sort((a, b) => a.n - b.n) };
+
+    // 2. known stems, near miss → diagnose the broken rule
+    for (const l of langs.all) if (words[l]) nearMatches(l, words[l], knownCands(l), res);
+    if (res.length) {
+      const best = Math.min(...res.map((x) => x.diag.dist));
+      return {
+        mode: 'diag',
+        results: res.filter((x) => x.diag.dist === best).sort((a, b) => (a.diag.indel ? 1 : 0) - (b.diag.indel ? 1 : 0) || b.n - a.n),
+      };
+    }
+
+    // 3. guessed stems (only languages the spelling points to); keep the fullest splits
+    for (const l of langs.guess) {
+      const w = words[l];
+      if (!w) continue;
+      const exact = [];
+      exactMatches(l, w, guessStems(l, w).map((entry) => ({ entry, known: false })), seen, exact);
+      const best = exact.reduce((m, x) => Math.max(m, x.n), 0);
+      if (best > 0) res.push(...exact.filter((x) => x.n === best));
+    }
+    return { mode: res.length ? 'guess' : 'none', results: res };
+  }
+
+  const Engine = { SLOTS, LANGS, derive, traits, roman, norm, distractors, shuffle, analyze, latToCyr: KK.latToCyr, kkClass: KK.cls };
   root.TurkicEngine = Engine;
   if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
 })(typeof window !== 'undefined' ? window : globalThis);

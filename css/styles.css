@@ -569,3 +569,66 @@ td .rom, th .rom { display: block; font-family: var(--mono); font-size: 11.5px; 
 .pop-ex { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13px; }
 .pop-ex .word { font-size: 15px; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+/* Analyzer (Builder top bar) */
+.analyzer { padding: 14px 18px; }
+.an-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.an-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+.an-label svg { width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; }
+.an-field { position: relative; flex: 1 1 260px; min-width: 0; max-width: 460px; }
+.an-field input {
+  width: 100%; height: 42px; padding: 0 38px 0 14px;
+  border-radius: 12px; border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text);
+  font: 500 16px var(--font);
+}
+.an-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.an-field input::placeholder { color: var(--muted); font-weight: 400; }
+.an-clear {
+  position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent;
+  color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer;
+}
+.an-clear:hover { color: var(--text); background: var(--surface-3); }
+.an-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.an-try { flex: none; white-space: nowrap; font-size: 12px; color: var(--muted); font-weight: 600; margin-right: 2px; }
+.chip.an-ex { min-height: 30px; padding: 4px 11px; font-size: 13px; }
+
+.an-status { margin: 12px 0 8px; font-size: 13px; color: var(--muted); }
+.an-status.diag { color: var(--bad); font-weight: 600; }
+.an-status.none { margin-bottom: 0; }
+.an-rows { display: grid; gap: 8px; }
+.an-rows:first-child { margin-top: 12px; }
+.an-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  width: 100%; padding: 10px 12px; text-align: left; cursor: pointer;
+  border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2);
+  transition: border-color 0.15s, background 0.15s;
+}
+.an-row:hover { border-color: var(--accent); background: var(--accent-soft); }
+.an-lang { font: 700 10.5px var(--mono); letter-spacing: 0.06em; color: var(--muted); background: var(--surface-3); padding: 3px 7px; border-radius: 6px; }
+.an-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; min-width: 0; }
+.an-main .word { font-size: 19px; }
+.an-parse { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12.5px; }
+.an-lemma { font-weight: 600; color: var(--text-2); margin-right: 2px; }
+.an-tag { font: 700 10.5px var(--mono); letter-spacing: 0.04em; padding: 2px 6px; border-radius: 5px; }
+.an-tag.NUMBER { color: var(--c-num); background: var(--c-num-bg); }
+.an-tag.POSS { color: var(--c-poss); background: var(--c-poss-bg); }
+.an-tag.CASE { color: var(--c-case); background: var(--c-case-bg); }
+.an-side { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.an-mean { font-size: 13px; color: var(--muted); text-align: right; }
+.an-go { color: var(--muted); font-weight: 700; }
+.an-row:hover .an-go { color: var(--accent); }
+mark.fix { background: color-mix(in srgb, var(--ok) 22%, transparent); color: inherit; border-radius: 3px; box-shadow: inset 0 -2px 0 var(--ok); }
+
+@media (max-width: 760px) {
+  .analyzer { padding: 12px 14px; }
+  .an-field { flex-basis: 100%; max-width: none; }
+  .an-examples { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; width: calc(100% + 28px); }
+  .an-examples::-webkit-scrollbar { display: none; }
+  .chip.an-ex { flex: none; }
+  .an-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; }
+  .an-side { grid-column: 2 / 4; justify-content: flex-start; grid-row: 2; }
+  .an-go { grid-row: 1; grid-column: 3; }
+  .an-mean { text-align: left; }
+}

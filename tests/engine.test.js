@@ -161,5 +161,60 @@ else {
   console.log('FAIL kk latin input: ' + latin);
 }
 
+// ── Analyzer (reverse) ──
+const known = {};
+for (const l of E.LANGS) known[l] = LEX.map((c) => ({ entry: c[l], ref: c.id }));
+const sig = (x) => `${x.lang}:${x.entry.word}:${x.slots.number}/${x.slots.poss}/${x.slots.case}`;
+// [input, expected mode, a signature that must be among the results, (diag) expected kind]
+const ANALYZE = [
+  ['evlerimde', 'known', 'tr:ev:PL/1SG/LOC'],
+  ['kitabımdan', 'known', 'tr:kitap:SG/1SG/ABL'],
+  ['ağzım', 'known', 'tr:ağız:SG/1SG/NOM'],
+  ['saatler', 'known', 'tr:saat:PL/NONE/NOM'],
+  ['кітабымнан', 'known', 'kk:кітап:SG/1SG/ABL'],
+  ['үйіне', 'known', 'kk:үй:SG/3SG/DAT'],
+  ['uylarimda', 'known', 'uz:uy:PL/1SG/LOC'],
+  ['toqqa', 'known', "uz:tog':SG/NONE/DAT"],
+  ["qishlog'imdan", 'known', 'uz:qishloq:SG/1SG/ABL'],
+  ['evleri', 'known', 'tr:ev:PL/NONE/ACC'],
+  ['evlarimde', 'diag', 'tr:ev:PL/1SG/LOC', 'harmony'],
+  ['kitapım', 'diag', 'tr:kitap:SG/1SG/NOM', 'stem'],
+  ['arabaım', 'diag', 'tr:araba:SG/1SG/NOM', 'buffer'],
+  ['evte', 'diag', 'tr:ev:SG/NONE/LOC', 'assim'],
+  ['үйлар', 'diag', 'kk:үй:PL/NONE/NOM', 'harmony'],
+  ['uylerda', 'diag', 'uz:uy:PL/NONE/LOC', 'uzinv'],
+  ['okullarda', 'guess', 'tr:okul:PL/NONE/LOC'],
+];
+for (const [input, mode, want, kind] of ANALYZE) {
+  const r = E.analyze(input, known);
+  const hit = r.results.find((x) => sig(x) === want);
+  const ok = r.mode === mode && hit && (!kind || hit.diag.kinds.includes(kind));
+  if (ok) pass++;
+  else {
+    fail++;
+    console.log(`FAIL analyze ${input}: mode ${r.mode}, got ${r.results.map(sig).join(', ')}${hit && hit.diag ? ' kinds ' + hit.diag.kinds : ''}`);
+  }
+}
+// evleri is ambiguous: 4 readings
+if (E.analyze('evleri', known).results.length === 4) pass++;
+else {
+  fail++;
+  console.log('FAIL analyze evleri: expected 4 readings');
+}
+// Every lexicon form round-trips: generate → analyze → the original reading is found
+let rt = 0;
+for (const c of LEX)
+  for (const l of E.LANGS)
+    for (const slots of [{ number: 'PL', poss: '1SG', case: 'LOC' }, { number: 'SG', poss: '3SG', case: 'ACC' }, { number: 'SG', poss: 'NONE', case: 'DAT' }]) {
+      const f = E.derive(l, c[l], slots).form;
+      const r = E.analyze(f, known);
+      if (r.mode === 'known' && r.results.some((x) => x.entry === c[l] && x.slots.number === slots.number && x.slots.poss === slots.poss && x.slots.case === slots.case)) rt++;
+      else {
+        fail++;
+        console.log(`FAIL round-trip ${l} ${f}: ${r.mode} ${r.results.map(sig).join(', ')}`);
+      }
+    }
+pass += rt;
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -665,6 +665,112 @@
     }
   }
 
+  /* ───────────── Analyzer (reverse lookup) ───────────── */
+  const AN_EXAMPLES = ['evlerimde', 'кітабымнан', "qishlog'imdan", 'evleri', 'evlarimde'];
+  const an = { input: '', result: null, timer: 0 };
+
+  function analyzerKnown() {
+    const known = {};
+    for (const l of LANGS) {
+      known[l] = LEX.map((c) => ({ entry: c[l], ref: c.id }));
+      if (state.custom && state.entries[l].word) known[l].unshift({ entry: { ...state.entries[l] }, ref: 'current' });
+    }
+    return known;
+  }
+
+  // Word with the corrected letters of a diagnosis highlighted
+  function segsMarkedHTML(d, lang, marks) {
+    let k = 0;
+    return d.segs
+      .map((s) => {
+        const cls = s.kind === 'stem' ? 'seg stem' + (s.altered ? ' altered' : '') : 'seg ' + s.slot + (s.kind === 'buffer' ? ' buffer' : '');
+        const inner = [...s.text].map((ch) => (marks.has(k++) ? `<mark class="fix">${esc(ch)}</mark>` : esc(ch))).join('');
+        return `<span class="${cls}">${inner}</span>`;
+      })
+      .join('');
+  }
+
+  function anRowHTML(x, i) {
+    const c = x.ref && x.ref !== 'current' ? conceptById(x.ref) : null;
+    const tags = [x.slots.number === 'PL' ? ['NUMBER', 'PL'] : null, x.slots.poss !== 'NONE' ? ['POSS', x.slots.poss] : null, x.slots.case !== 'NOM' ? ['CASE', x.slots.case] : null]
+      .filter(Boolean)
+      .map(([slot, tag]) => `<span class="an-tag ${slot}">${tag}</span>`)
+      .join('');
+    let word;
+    if (x.diag) {
+      const marks = new Set(x.diag.subs.map((s) => s[0]));
+      if (x.diag.indel && !x.diag.indel.extra) marks.add(x.diag.indel.i);
+      word = segsMarkedHTML(x.d, x.lang, marks);
+    } else word = segsHTML(x.d, x.lang);
+    let side = '';
+    if (x.diag) side = x.diag.kinds.map((k) => `<span class="badge warn">${esc(t('an_' + k))}</span>`).join('');
+    else if (!x.known) side = `<span class="badge">${esc(t('anGuessed'))}</span>`;
+    else if (c) side = `<span class="an-mean">${esc(meaning(c, x.slots, false))}</span>`;
+    return `<button type="button" class="an-row" data-an="${i}" title="${esc(t('anOpen'))}">
+      <span class="an-lang">${x.lang.toUpperCase()}</span>
+      <span class="an-main"><span class="word">${word}</span><span class="an-parse"><span class="an-lemma">${esc(x.entry.word)}</span>${tags}</span></span>
+      <span class="an-side">${side}</span>
+      <span class="an-go" aria-hidden="true">→</span>
+    </button>`;
+  }
+
+  function renderAnalyzer() {
+    const input = $('#an-input');
+    input.placeholder = t('anPlaceholder');
+    $('#an-clear').hidden = !input.value;
+    $('#an-clear').setAttribute('aria-label', t('anClear'));
+    $('#an-examples').innerHTML = `<span class="an-try">${esc(t('anTry'))}</span>${AN_EXAMPLES.map((w) => `<button type="button" class="chip an-ex" data-an-ex="${esc(w)}">${esc(w)}</button>`).join('')}`;
+    const r = an.result;
+    if (!r || !an.input.trim()) {
+      $('#an-results').innerHTML = '';
+      return;
+    }
+    let status = '';
+    if (r.mode === 'none') status = t('anNone');
+    else if (r.mode === 'diag') status = t('anDiag');
+    else if (r.mode === 'guess') status = t('anGuess');
+    else if (r.results.length > 1) status = t('anAmbig').replace('{n}', r.results.length);
+    const rows = r.results.slice(0, 5).map(anRowHTML).join('');
+    $('#an-results').innerHTML = `${status ? `<p class="an-status ${r.mode}">${esc(status)}</p>` : ''}${rows ? `<div class="an-rows">${rows}</div>` : ''}`;
+  }
+
+  function runAnalyzer() {
+    an.input = $('#an-input').value;
+    an.result = an.input.trim() ? E.analyze(an.input, analyzerKnown()) : null;
+    renderAnalyzer();
+  }
+
+  function loadAnalysis(x) {
+    if (x.ref === 'current') {
+      /* the Builder already holds this stem */
+    } else if (x.known) selectConcept(x.ref);
+    else {
+      state.custom = true;
+      state.entries[x.lang] = { ...x.entry };
+    }
+    state.slots = { ...x.slots };
+    state.langs[x.lang] = true;
+    renderAll();
+    const top = $('#results').getBoundingClientRect().top + window.scrollY - 130;
+    window.scrollTo({ top, behavior: 'smooth' });
+  }
+
+  $('#an-input').addEventListener('input', () => {
+    $('#an-clear').hidden = !$('#an-input').value;
+    clearTimeout(an.timer);
+    an.timer = setTimeout(runAnalyzer, 180);
+  });
+  $('#an-input').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      clearTimeout(an.timer);
+      runAnalyzer();
+      if (an.result && an.result.results.length) loadAnalysis(an.result.results[0]);
+    } else if (ev.key === 'Escape') {
+      $('#an-input').value = '';
+      runAnalyzer();
+    }
+  });
+
   /* ───────────── URL state ───────────── */
   function writeHash() {
     const p = new URLSearchParams();
@@ -708,6 +814,7 @@
   /* ───────────── Render orchestration ───────────── */
   function renderBuilder(full = true) {
     if (full) {
+      renderAnalyzer();
       renderConcepts();
       renderStemInputs();
       renderSlots();
@@ -779,6 +886,16 @@
     if (!el) return;
     const ds = el.dataset;
 
+    if (ds.an != null) return loadAnalysis(an.result.results[Number(ds.an)]);
+    if (ds.anEx) {
+      $('#an-input').value = ds.anEx;
+      return runAnalyzer();
+    }
+    if (el.id === 'an-clear') {
+      $('#an-input').value = '';
+      runAnalyzer();
+      return $('#an-input').focus();
+    }
     if (ds.info) {
       if (pop.btn === el && pop.pinned) return hideCaseInfo();
       return showCaseInfo(el, true);
